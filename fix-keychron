@@ -1,0 +1,89 @@
+#!/bin/bash
+set -e
+
+clean () {
+    echo "Cleaning previous install"
+    set +u
+    systemctl daemon-reload
+    systemctl stop keychron
+    systemctl disable keychron
+    rm /usr/local/bin/`basename "$(readlink -f $0)"`
+    rm /etc/systemd/system/keychron.service
+    systemctl daemon-reload
+    systemctl reset-failed
+    set -u
+}
+
+creating_script () {
+    echo "Copying this script to /usr/local/bin"
+    cp "$(readlink -f $0)" "/usr/local/bin"
+}
+
+creating_unit () {
+    echo "Creating unit in /etc/systemd/system/keychron.service"
+    echo "\
+[Unit]
+Description=Fix Keychron bluetooth
+
+[Service]
+Restart=always
+RestartSec=5s
+ExecStart=/usr/local/bin/fix-keychron once
+
+[Install]
+WantedBy=multi-user.target
+" > /etc/systemd/system/keychron.service
+}
+
+enabling_service () {
+    echo "Checking and activating keychron systemd service"
+    systemctl is-active keychron \
+    || systemctl enable keychron \
+    && systemctl start keychron
+    systemctl status keychron
+}
+
+checking_install () {
+    systemctl is-active keychron
+}
+
+once () {
+
+    cmd="echo 0 > /sys/module/hid_apple/parameters/fnmode"
+    echo "Setting fnmode to 0 in /sys/module/hid_apple/parameters ..."
+    eval $cmd
+    result=$(cat /sys/module/hid_apple/parameters/fnmode)
+    echo "New value: $result"
+    if [ "$result" -eq "0" ]; then
+        exit 0
+    else
+        exit 2
+    fi
+}
+
+help () {
+    echo "Available commands: "
+    echo "  once: fix once (eg to check if it will work before installing the service)"
+    echo "  install: install as systemd (unit) service"
+    exit 1
+}
+
+install () {
+    set -u
+    clean
+    creating_script
+    creating_unit
+    enabling_service
+    checking_install
+}
+
+opts=(once install)
+
+for i in "${opts[@]}"
+do
+    if [ "$i" == "$1" ] ; then
+        eval $1
+        exit 0
+    fi
+done
+help

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run foo
+
+[Service]
+Restart=always
+RestartSec=5s
+ExecStart=/home/pwoolvett/.local/bin/fix-kb
+
+[Install]
+WantedBy=multi-user.target
